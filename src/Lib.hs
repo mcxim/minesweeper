@@ -15,9 +15,11 @@ data State = Flag | Closed | Open
 data Difficulty = Difficulty {height :: Int, width :: Int, numMines :: Int}
   deriving Show
 
+twoByTwo = Difficulty { height = 2, width = 2, numMines = 3 }
 beginner = Difficulty { height = 9, width = 9, numMines = 10 }
 intermediate = Difficulty { height = 16, width = 16, numMines = 40 }
 expert = Difficulty { height = 16, width = 30, numMines = 99 }
+impossible = Difficulty { height = 10, width = 10, numMines = 99 }
 
 data Cell = Cell {number :: Int, state :: State}
   deriving Show
@@ -46,10 +48,9 @@ addRandomMine board = undefined
 
 initBoard :: Difficulty -> IO Board
 initBoard difficulty =
-  let board = emptyBoard difficulty
-      matrix =
-          [ [ (row, col) | col <- [0 .. width difficulty] ]
-          | row <- [0 .. height difficulty]
+  let matrix =
+          [ [ (row, col) | col <- [0 .. width difficulty - 1] ]
+          | row <- [0 .. height difficulty - 1]
           ]
       idxs = concat matrix
       genMineIdxs =
@@ -66,3 +67,24 @@ initBoard difficulty =
                 if idx `elem` mineIdxs then Cell 0 Closed else Cell 9 Closed
               )
           $ matrix
+
+unlockCell :: Cell -> Cell
+unlockCell (Cell number _) = Cell number Open
+
+unlockBoard :: Board -> Board
+unlockBoard = (map . map) unlockCell
+
+showCell :: Cell -> String
+showCell (Cell _      Closed) = "%"
+showCell (Cell _      Flag  ) = "P"
+showCell (Cell 0      Open  ) = "*"
+showCell (Cell 9      Open  ) = "_"
+showCell (Cell number Open  ) = show number
+
+prettyRepr :: Board -> String
+prettyRepr = unlines . map (unwords . map showCell)
+
+prettyPrint :: Board -> IO ()
+prettyPrint = putStrLn . prettyRepr
+
+
