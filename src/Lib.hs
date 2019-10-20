@@ -113,14 +113,11 @@ unlockCell (Cell number _) = Cell number Open
 unlockBoard :: Board -> Board
 unlockBoard = (map . map) unlockCell
 
-unlockCellInBoard :: Board -> (Int, Int) -> Board
-unlockCellInBoard = opOnCell (\(Cell number _) -> Cell number Open)
-
 unlockEmptyFrom :: Board -> (Int, Int) -> Board
 unlockEmptyFrom board coords = L.foldl' foldFunction
-                                        (unlockCellInBoard board coords)
+                                        (opOnCell unlockCell board coords)
                                         (neighborIdxs board coords)
  where
   foldFunction accBoard coords@(row, col)
     | accBoard !! row !! col == closedEmpty = unlockEmptyFrom accBoard coords
-    | otherwise                             = unlockCellInBoard accBoard coords
+    | otherwise = opOnCell unlockCell accBoard coords
