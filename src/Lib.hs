@@ -56,6 +56,7 @@ neighbors board (row, col) =
   , col' `inRange` (0, length (head board) - 1)
   , not (row' == 0 && col' == 0)
   ]
+
 -- | Returns a new board given a difficulty.
 -- Testing: initBoard intermediate >>= (prettyPrint . unlockBoard)
 initBoard :: Difficulty -> IO Board
@@ -87,7 +88,6 @@ initBoard difficulty =
             return $ if bare !! row !! col == closedMine
               then closedMine
               else Cell numSurMines Closed
-
 
 unlockCell :: Cell -> Cell
 unlockCell (Cell number _) = Cell number Open
