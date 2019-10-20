@@ -42,8 +42,8 @@ prettyPrint = putStrLn . prettyRepr
 inRange :: (Num a, Ord a) => a -> (a, a) -> Bool
 inRange num (lower, upper) = num <= upper && num >= lower
 
-opOnCell :: Board -> (Cell -> Cell) -> (Int, Int) -> Board
-opOnCell board f (row, col) =
+opOnCell :: (Cell -> Cell) -> Board -> (Int, Int) -> Board
+opOnCell f board (row, col) =
   take row board
     ++ [take col (board !! row) ++ [f cell] ++ drop (col + 1) (board !! row)]
     ++ drop (row + 1) board
@@ -114,16 +114,13 @@ unlockBoard :: Board -> Board
 unlockBoard = (map . map) unlockCell
 
 unlockCellInBoard :: Board -> (Int, Int) -> Board
-unlockCellInBoard board (row, col) =
-  opOnCell board (\(Cell number _) -> Cell number Open) (row, col)
+unlockCellInBoard = opOnCell (\(Cell number _) -> Cell number Open)
 
 unlockEmptyFrom :: Board -> (Int, Int) -> Board
-unlockEmptyFrom board (row, col) = L.foldl'
-  foldFunction
-  (unlockCellInBoard board (row, col))
-  (neighborIdxs board (row, col))
+unlockEmptyFrom board coords = L.foldl' foldFunction
+                                        (unlockCellInBoard board coords)
+                                        (neighborIdxs board coords)
  where
-  foldFunction accBoard (row, col)
-    | accBoard !! row !! col == closedEmpty = unlockEmptyFrom accBoard
-                                                              (row, col)
-    | otherwise = unlockCellInBoard accBoard (row, col)
+  foldFunction accBoard coords@(row, col)
+    | accBoard !! row !! col == closedEmpty = unlockEmptyFrom accBoard coords
+    | otherwise                             = unlockCellInBoard accBoard coords
