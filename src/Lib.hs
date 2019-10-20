@@ -10,24 +10,25 @@ someFunc :: IO ()
 someFunc = putStrLn "someFunc"
 
 data State = Flag | Closed | Open
-  deriving Show
+  deriving (Show, Eq)
 
 data Difficulty = Difficulty {height :: Int, width :: Int, numMines :: Int}
-  deriving Show
+  deriving (Show, Eq)
 
-twoByTwo = Difficulty { height = 2, width = 2, numMines = 3 }
 beginner = Difficulty { height = 9, width = 9, numMines = 10 }
 intermediate = Difficulty { height = 16, width = 16, numMines = 40 }
 expert = Difficulty { height = 16, width = 30, numMines = 99 }
-impossible = Difficulty { height = 10, width = 10, numMines = 99 }
 
 data Cell = Cell {number :: Int, state :: State}
-  deriving Show
+  deriving (Show, Eq)
+
+closedMine = Cell 9 Closed
+closedEmpty = Cell 0 Closed
 
 type Board = [[Cell]]
 
-inRange :: (Num a, Ord a) => (a, a) -> a -> Bool
-inRange (lower, upper) num = num <= upper && num >= lower
+inRange :: (Num a, Ord a) => a -> (a, a) -> Bool
+inRange num (lower, upper) = num <= upper && num >= lower
 
 changeCell :: Board -> Cell -> (Int, Int) -> Board
 changeCell board cell (row, col) =
@@ -46,27 +47,50 @@ composeMN n f = f >=> composeMN (n - 1) f
 addRandomMine :: Board -> IO Board
 addRandomMine board = undefined
 
+neighbors :: Board -> (Int, Int) -> [Cell]
+neighbors board (row, col) =
+  [ board !! row' !! col'
+  | row' <- [row - 1 .. row + 1]
+  , col' <- [col - 1 .. col + 1]
+  , not (row' == 0 && col' == 0)
+  , row' `inRange` (0, length board - 1)
+  , col' `inRange` (0, length (head board) - 1)
+  ]
+
+-- | Returns a new board given a difficulty.
+-- Testing: initBoard intermediate >>= (prettyPrint . unlockBoard)
 initBoard :: Difficulty -> IO Board
 initBoard difficulty =
-  let matrix =
-          [ [ (row, col) | col <- [0 .. width difficulty - 1] ]
-          | row <- [0 .. height difficulty - 1]
-          ]
-      idxs = concat matrix
-      genMineIdxs =
-          (\g -> map (idxs !!) $ take
-              (numMines difficulty)
-              (L.nub $ R.randomRs (0, length idxs - 1) g)
-            )
-            <$> R.newStdGen
-  in  do
-        mineIdxs <- genMineIdxs
-        return
-          . (map . map)
-              (\idx ->
-                if idx `elem` mineIdxs then Cell 0 Closed else Cell 9 Closed
-              )
-          $ matrix
+  let
+    matrix =
+      [ [ (row, col) | col <- [0 .. width difficulty - 1] ]
+      | row <- [0 .. height difficulty - 1]
+      ]
+    idxs = concat matrix
+    genMineIdxs =
+      (\g -> map (idxs !!) $ take (numMines difficulty)
+                                  (L.nub $ R.randomRs (0, length idxs - 1) g)
+        )
+        <$> R.newStdGen
+    genBare = do
+      mineIdxs <- genMineIdxs
+      return $ (map . map)
+        (\idx -> if idx `elem` mineIdxs then closedMine else closedEmpty)
+        matrix
+    genFinal = do
+      bare <- genBare
+      return $ do -- List monad
+        row <- [0 .. height difficulty - 1]
+        return $ do -- List monad
+          col <- [0 .. width difficulty - 1]
+          let numSurMines =
+                length (filter (== closedMine) (neighbors bare (row, col)))
+          return $ if bare !! row !! col == closedMine
+            then closedMine
+            else Cell numSurMines Closed
+  in
+    genFinal
+
 
 unlockCell :: Cell -> Cell
 unlockCell (Cell number _) = Cell number Open
@@ -75,11 +99,11 @@ unlockBoard :: Board -> Board
 unlockBoard = (map . map) unlockCell
 
 showCell :: Cell -> String
-showCell (Cell _      Closed) = "%"
-showCell (Cell _      Flag  ) = "P"
-showCell (Cell 0      Open  ) = "*"
-showCell (Cell 9      Open  ) = "_"
-showCell (Cell number Open  ) = show number
+showCell (Cell _      Closed) = "%" -- Closed cell
+showCell (Cell _      Flag  ) = "P" -- Flag
+showCell (Cell 9      Open  ) = "*" -- Mine
+showCell (Cell 0      Open  ) = "_" -- No number
+showCell (Cell number Open  ) = show number -- Number
 
 prettyRepr :: Board -> String
 prettyRepr = unlines . map (unwords . map showCell)
