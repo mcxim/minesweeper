@@ -67,7 +67,7 @@ neighborIdxs board (row, col) =
   , row' `inRange` (0, length board - 1)
   , col' <- [col - 1 .. col + 1]
   , col' `inRange` (0, length (head board) - 1)
-  , not (row' == 0 && col' == 0)
+  , not (row' == row && col' == col)
   ]
 
 neighbors :: Board -> (Int, Int) -> [Cell]
