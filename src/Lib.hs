@@ -27,6 +27,18 @@ closedEmpty = Cell 0 Closed
 
 type Board = [[Cell]]
 
+showCell (Cell _      Closed) = "%"         -- Closed cell
+showCell (Cell _      Flag  ) = "P"         -- Flag
+showCell (Cell 9      Open  ) = "*"         -- Mine
+showCell (Cell 0      Open  ) = "_"         -- No number
+showCell (Cell number Open  ) = show number -- Number
+
+prettyRepr :: Board -> String
+prettyRepr = unlines . map (unwords . map showCell)
+
+prettyPrint :: Board -> IO ()
+prettyPrint = putStrLn . prettyRepr
+
 inRange :: (Num a, Ord a) => a -> (a, a) -> Bool
 inRange num (lower, upper) = num <= upper && num >= lower
 
@@ -107,20 +119,11 @@ unlockCellInBoard board (row, col) =
 
 unlockEmptyFrom :: Board -> (Int, Int) -> Board
 unlockEmptyFrom board (row, col) = L.foldl'
-  (\accBoard (row', col') -> unlockEmptyFrom accBoard (row', col'))
+  foldFunction
   (unlockCellInBoard board (row, col))
-  (filter (\(row', col') -> board !! row' !! col' == closedEmpty)
-          (neighborIdxs board (row, col))
-  )
-
-showCell (Cell _      Closed) = "%"         -- Closed cell
-showCell (Cell _      Flag  ) = "P"         -- Flag
-showCell (Cell 9      Open  ) = "*"         -- Mine
-showCell (Cell 0      Open  ) = "_"         -- No number
-showCell (Cell number Open  ) = show number -- Number
-
-prettyRepr :: Board -> String
-prettyRepr = unlines . map (unwords . map showCell)
-
-prettyPrint :: Board -> IO ()
-prettyPrint = putStrLn . prettyRepr
+  (neighborIdxs board (row, col))
+ where
+  foldFunction accBoard (row, col)
+    | accBoard !! row !! col == closedEmpty = unlockEmptyFrom accBoard
+                                                              (row, col)
+    | otherwise = unlockCellInBoard accBoard (row, col)
