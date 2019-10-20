@@ -51,45 +51,42 @@ neighbors :: Board -> (Int, Int) -> [Cell]
 neighbors board (row, col) =
   [ board !! row' !! col'
   | row' <- [row - 1 .. row + 1]
-  , col' <- [col - 1 .. col + 1]
-  , not (row' == 0 && col' == 0)
   , row' `inRange` (0, length board - 1)
+  , col' <- [col - 1 .. col + 1]
   , col' `inRange` (0, length (head board) - 1)
+  , not (row' == 0 && col' == 0)
   ]
-
 -- | Returns a new board given a difficulty.
 -- Testing: initBoard intermediate >>= (prettyPrint . unlockBoard)
 initBoard :: Difficulty -> IO Board
 initBoard difficulty =
-  let
-    matrix =
-      [ [ (row, col) | col <- [0 .. width difficulty - 1] ]
-      | row <- [0 .. height difficulty - 1]
-      ]
-    idxs = concat matrix
-    genMineIdxs =
-      (\g -> map (idxs !!) $ take (numMines difficulty)
-                                  (L.nub $ R.randomRs (0, length idxs - 1) g)
-        )
-        <$> R.newStdGen
-    genBare = do
-      mineIdxs <- genMineIdxs
-      return $ (map . map)
-        (\idx -> if idx `elem` mineIdxs then closedMine else closedEmpty)
-        matrix
-    genFinal = do
-      bare <- genBare
-      return $ do -- List monad
-        row <- [0 .. height difficulty - 1]
+  let matrix =
+          [ [ (row, col) | col <- [0 .. width difficulty - 1] ]
+          | row <- [0 .. height difficulty - 1]
+          ]
+      idxs = concat matrix
+      genMineIdxs =
+          (\g -> map (idxs !!) $ take
+              (numMines difficulty)
+              (L.nub $ R.randomRs (0, length idxs - 1) g)
+            )
+            <$> R.newStdGen
+      genBare = do
+        mineIdxs <- genMineIdxs
+        return $ (map . map)
+          (\idx -> if idx `elem` mineIdxs then closedMine else closedEmpty)
+          matrix
+  in  do
+        bare <- genBare
         return $ do -- List monad
-          col <- [0 .. width difficulty - 1]
-          let numSurMines =
-                length (filter (== closedMine) (neighbors bare (row, col)))
-          return $ if bare !! row !! col == closedMine
-            then closedMine
-            else Cell numSurMines Closed
-  in
-    genFinal
+          row <- [0 .. height difficulty - 1]
+          return $ do -- List monad
+            col <- [0 .. width difficulty - 1]
+            let numSurMines =
+                  length (filter (== closedMine) (neighbors bare (row, col)))
+            return $ if bare !! row !! col == closedMine
+              then closedMine
+              else Cell numSurMines Closed
 
 
 unlockCell :: Cell -> Cell
