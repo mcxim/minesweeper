@@ -30,11 +30,12 @@ type Board = [[Cell]]
 inRange :: (Num a, Ord a) => a -> (a, a) -> Bool
 inRange num (lower, upper) = num <= upper && num >= lower
 
-changeCell :: Board -> Cell -> (Int, Int) -> Board
-changeCell board cell (row, col) =
+opOnCell :: Board -> (Cell -> Cell) -> (Int, Int) -> Board
+opOnCell board f (row, col) =
   take row board
-    ++ [take col (board !! row) ++ [cell] ++ drop (col + 1) (board !! row)]
+    ++ [take col (board !! row) ++ [f cell] ++ drop (col + 1) (board !! row)]
     ++ drop (row + 1) board
+  where cell = board !! row !! col
 
 emptyBoard :: Difficulty -> Board
 emptyBoard difficulty =
@@ -47,15 +48,19 @@ composeMN n f = f >=> composeMN (n - 1) f
 addRandomMine :: Board -> IO Board
 addRandomMine board = undefined
 
-neighbors :: Board -> (Int, Int) -> [Cell]
-neighbors board (row, col) =
-  [ board !! row' !! col'
+neighborIdxs :: Board -> (Int, Int) -> [(Int, Int)]
+neighborIdxs board (row, col) =
+  [ (row', col')
   | row' <- [row - 1 .. row + 1]
   , row' `inRange` (0, length board - 1)
   , col' <- [col - 1 .. col + 1]
   , col' `inRange` (0, length (head board) - 1)
   , not (row' == 0 && col' == 0)
   ]
+
+neighbors :: Board -> (Int, Int) -> [Cell]
+neighbors board (row, col) =
+  map (\(row', col') -> board !! row' !! col') (neighborIdxs board (row, col))
 
 -- | Returns a new board given a difficulty.
 -- Testing: initBoard intermediate >>= (prettyPrint . unlockBoard)
@@ -79,15 +84,16 @@ initBoard difficulty =
           matrix
   in  do
         bare <- genBare
-        return $ do -- List monad
-          row <- [0 .. height difficulty - 1]
-          return $ do -- List monad
-            col <- [0 .. width difficulty - 1]
-            let numSurMines =
-                  length (filter (== closedMine) (neighbors bare (row, col)))
-            return $ if bare !! row !! col == closedMine
-              then closedMine
-              else Cell numSurMines Closed
+        return
+          [ [ if bare !! row !! col == closedMine
+                then closedMine
+                else Cell numSurMines Closed
+            | col <- [0 .. width difficulty - 1]
+            , let numSurMines = length
+                    (filter (== closedMine) (neighbors bare (row, col)))
+            ]
+          | row <- [0 .. height difficulty - 1]
+          ]
 
 unlockCell :: Cell -> Cell
 unlockCell (Cell number _) = Cell number Open
@@ -95,11 +101,20 @@ unlockCell (Cell number _) = Cell number Open
 unlockBoard :: Board -> Board
 unlockBoard = (map . map) unlockCell
 
-showCell :: Cell -> String
-showCell (Cell _      Closed) = "%" -- Closed cell
-showCell (Cell _      Flag  ) = "P" -- Flag
-showCell (Cell 9      Open  ) = "*" -- Mine
-showCell (Cell 0      Open  ) = "_" -- No number
+unlockCellInBoard :: Board -> (Int, Int) -> Board
+unlockCellInBoard board (row, col) =
+  opOnCell board (\(Cell number _) -> Cell number Open) (row, col)
+
+unlockEmptyFrom :: Board -> (Int, Int) -> Board
+unlockEmptyFrom board (row, col) = L.foldl'
+  (\accBoard (row', col') -> unlockEmptyFrom accBoard (row', col'))
+  (unlockCellInBoard board (row, col))
+  (neighborIdxs board (row, col))
+
+showCell (Cell _      Closed) = "%"         -- Closed cell
+showCell (Cell _      Flag  ) = "P"         -- Flag
+showCell (Cell 9      Open  ) = "*"         -- Mine
+showCell (Cell 0      Open  ) = "_"         -- No number
 showCell (Cell number Open  ) = show number -- Number
 
 prettyRepr :: Board -> String
@@ -107,5 +122,3 @@ prettyRepr = unlines . map (unwords . map showCell)
 
 prettyPrint :: Board -> IO ()
 prettyPrint = putStrLn . prettyRepr
-
-
