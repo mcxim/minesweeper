@@ -109,7 +109,9 @@ unlockEmptyFrom :: Board -> (Int, Int) -> Board
 unlockEmptyFrom board (row, col) = L.foldl'
   (\accBoard (row', col') -> unlockEmptyFrom accBoard (row', col'))
   (unlockCellInBoard board (row, col))
-  (neighborIdxs board (row, col))
+  (filter (\(row', col') -> board !! row' !! col' == closedEmpty)
+          (neighborIdxs board (row, col))
+  )
 
 showCell (Cell _      Closed) = "%"         -- Closed cell
 showCell (Cell _      Flag  ) = "P"         -- Flag
