@@ -8,12 +8,12 @@ cabal-version: 1.12
 
 name:           minesweeper
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/minesweeper#readme>
-homepage:       https://github.com/githubuser/minesweeper#readme
-bug-reports:    https://github.com/githubuser/minesweeper/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2019 Author name here
+description:    Please see the README on GitHub at https://github.com/mcxim/minesweeper#readme>
+homepage:       https://github.com/mcxim/minesweeper#readme
+bug-reports:    https://github.com/mcxim/minesweeper/issues
+author:         Maxim Gelfand
+maintainer:     gelfandmaxim@gmail.com
+copyright:      2019 Maxim Gelfand
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
