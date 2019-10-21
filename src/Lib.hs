@@ -15,6 +15,7 @@ import           Text.Read                      ( readMaybe )
 import           Data.Maybe                     ( fromMaybe
                                                 , isNothing
                                                 )
+import           System.Exit                    ( exitSuccess )
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
@@ -50,7 +51,15 @@ showCell (Cell 0      Open  ) = "-"         -- No number
 showCell (Cell number Open  ) = show number -- Number
 
 prettyRepr :: Board -> String
-prettyRepr = unlines . map (unwords . map showCell)
+prettyRepr board =
+  "\n    "
+    ++ unwords (map (show . (`mod` 10)) [1 .. (length $ head board)])
+    ++ "\n\n"
+    ++ ( unlines
+       . zipWith (\c rest -> c : "   " ++ rest) ['a' ..]
+       . map (unwords . map showCell)
+       $ board
+       )
 
 prettyPrint :: Board -> IO ()
 prettyPrint = putStrLn . prettyRepr
@@ -212,7 +221,8 @@ inputDifficulty = do
     'b' -> putStrLn "Difficulty set to beginner." >> return beginner
     'i' -> putStrLn "Difficulty set to intermediate." >> return intermediate
     'e' -> putStrLn "Difficulty set to expert." >> return expert
-    _   -> inputDifficulty
+    'q' -> exitSuccess
+    _   -> putStrLn "Invalid input." >> inputDifficulty
 
 inputFirstMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
 inputFirstMove difficulty = do
@@ -221,7 +231,9 @@ inputFirstMove difficulty = do
     "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
   input <- getLine
   let maybeMove = evalInput difficulty ("o" ++ input)
-  if isNothing maybeMove then inputFirstMove difficulty else return maybeMove
+  if isNothing maybeMove
+    then putStrLn "Invalid input." >> inputFirstMove difficulty
+    else return maybeMove
 
 gameLoop :: Difficulty -> Board -> Maybe (Move, (Int, Int)) -> IO ()
 gameLoop difficulty board maybeMoveCoords
@@ -243,4 +255,3 @@ runGame = do
   let (_, (row, col)) = fromMaybe undefined maybeMove
   board <- initBoard difficulty [(row, col)]
   gameLoop difficulty board maybeMove
-
