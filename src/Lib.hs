@@ -1,7 +1,6 @@
 module Lib where
 
 import qualified System.Random                 as R
-import           Control.Monad                  ( (>=>) )
 import qualified Data.Set                      as S
 import qualified Data.List                     as L
 import           Test.Hspec
@@ -27,21 +26,23 @@ data Move = FlagIt | OpenIt | UnFlagIt
 data Difficulty = Difficulty {height :: Int, width :: Int, numMines :: Int}
   deriving (Show, Eq)
 
+data Cell = Cell {number :: Int, state :: State}
+  deriving (Show, Eq)
+
+type Board = [[Cell]]
+
 beginner = Difficulty { height = 9, width = 9, numMines = 10 }
 intermediate = Difficulty { height = 16, width = 16, numMines = 40 }
 expert = Difficulty { height = 16, width = 30, numMines = 99 }
 
-data Cell = Cell {number :: Int, state :: State}
-  deriving (Show, Eq)
-
 closedMine = Cell 9 Closed
 closedEmpty = Cell 0 Closed
 
-closedPeaceful :: Cell -> Bool
-closedPeaceful (Cell number state) = state == Closed && number /= 9
+dummyBoard :: Difficulty -> Board
+dummyBoard difficulty =
+  replicate (height difficulty) $ replicate (width difficulty) (Cell 9 Closed)
 
-type Board = [[Cell]]
-
+showCell :: Cell -> String
 showCell (Cell _      Closed) = "%"         -- Closed cell
 showCell (Cell _      Flag  ) = "P"         -- Flag
 showCell (Cell 9      Open  ) = "*"         -- Mine
@@ -64,30 +65,6 @@ prettyPrint = putStrLn . prettyRepr
 
 inRange :: (Num a, Ord a) => a -> (a, a) -> Bool
 inRange num (lower, upper) = num <= upper && num >= lower
-
-opOnCell :: (Cell -> Cell) -> Board -> (Int, Int) -> Board
-opOnCell f board (row, col) =
-  take row board
-    ++ [take col (board !! row) ++ [f cell] ++ drop (col + 1) (board !! row)]
-    ++ drop (row + 1) board
-  where cell = board !! row !! col
-
-emptyBoard :: Difficulty -> Board
-emptyBoard difficulty =
-  replicate (height difficulty) $ replicate (width difficulty) (Cell 9 Closed)
-
-dummyBoard :: Difficulty -> Board
-dummyBoard difficulty =
-  [ [ Cell 0 Closed | _ <- [1 .. width difficulty] ]
-  | _ <- [1 .. height difficulty]
-  ]
-
-composeMN :: (Monad m) => Int -> (a -> m a) -> a -> m a
-composeMN 1 f = f
-composeMN n f = f >=> composeMN (n - 1) f
-
-addRandomMine :: Board -> IO Board
-addRandomMine board = undefined
 
 neighborIdxs :: [[a]] -> (Int, Int) -> [(Int, Int)]
 neighborIdxs board (row, col) =
@@ -140,6 +117,13 @@ initBoard difficulty safeSpots =
           | row <- [0 .. height difficulty - 1]
           ]
 
+opOnCell :: (Cell -> Cell) -> Board -> (Int, Int) -> Board
+opOnCell f board (row, col) =
+  take row board
+    ++ [take col (board !! row) ++ [f cell] ++ drop (col + 1) (board !! row)]
+    ++ drop (row + 1) board
+  where cell = board !! row !! col
+
 unlockCell :: Cell -> Cell
 unlockCell (Cell number _) = Cell number Open
 
@@ -163,7 +147,7 @@ unlockEmptyFrom board coords@(row, col)
   where cell = board !! row !! col
 
 doMove :: Board -> Maybe (Move, (Int, Int)) -> (Board, Bool, String)
-doMove board Nothing = (board, True, "Invalid input. (doMove)")
+doMove board Nothing = (board, True, "Invalid input.")
 doMove board (Just (move, coords))
   | state cell == Open
   = (board, True, "This cell is already open.")
@@ -172,15 +156,16 @@ doMove board (Just (move, coords))
   | move == UnFlagIt
   = (opOnCell unFlagCell board coords, True, "Cell successfuly unflagged.")
   | state cell == Flag
-  = (board, True, "You need to unflag this cell (u) before you can open it.")
-  | number cell == 9 -- mine
+  = (board, True, "You need to unflag this cell before you can open it.")
+  | number cell == 9
   = (unlockBoard board, False, "Whoops, you stepped on a mine!")
   | otherwise
   = (unlockEmptyFrom board coords, True, "That was an empty cell.")
   where cell = board !! fst coords !! snd coords
 
-isGameWon :: Board -> Bool
-isGameWon = not . any (any closedPeaceful)
+gameWon :: Board -> Bool
+gameWon = not . any (any closedPeaceful)
+  where closedPeaceful (Cell number state) = state == Closed && number /= 9
 
 inputMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
 inputMove difficulty = do
@@ -189,11 +174,11 @@ inputMove difficulty = do
   input <- getLine
   if input == "q"
     then exitSuccess
-    else do
+    else
       let move = evalInput difficulty input
-      if isNothing move
-        then putStrLn "Invalid input. (inputMove)" >> inputMove difficulty
-        else return move
+      in  if isNothing move
+            then putStrLn "Invalid input." >> inputMove difficulty
+            else return move
 
 inputFirstMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
 inputFirstMove difficulty = do
@@ -203,12 +188,11 @@ inputFirstMove difficulty = do
   input <- getLine
   if input == "q"
     then exitSuccess
-    else do
+    else
       let move = evalInput difficulty ("o" ++ input)
-      if isNothing move
-        then putStrLn "Invalid input. (inputFirstMove)"
-          >> inputFirstMove difficulty
-        else return move
+      in  if isNothing move
+            then putStrLn "Invalid input." >> inputFirstMove difficulty
+            else return move
 
 evalInput :: Difficulty -> String -> Maybe (Move, (Int, Int))
 evalInput difficulty input = do
@@ -241,11 +225,11 @@ inputDifficulty = do
     'i' -> putStrLn "Difficulty set to intermediate." >> return intermediate
     'e' -> putStrLn "Difficulty set to expert." >> return expert
     'q' -> exitSuccess
-    _   -> putStrLn "Invalid input. (inputDifficulty)" >> inputDifficulty
+    _   -> putStrLn "Invalid input." >> inputDifficulty
 
 gameLoop :: Difficulty -> Board -> Maybe (Move, (Int, Int)) -> IO ()
 gameLoop difficulty board maybeMoveCoords
-  | isGameWon board = putStrLn "You won!"
+  | gameWon board = putStrLn "You won!"
   | otherwise = do
     let (newBoard, continue, message) = doMove board maybeMoveCoords
     prettyPrint newBoard
