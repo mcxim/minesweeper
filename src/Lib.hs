@@ -13,7 +13,7 @@ someFunc = putStrLn "someFunc"
 data State = Flag | Closed | Open
   deriving (Show, Eq)
 
-data Move = FlagIt | OpenIt
+data Move = FlagIt | OpenIt | UnFlagIt
   deriving (Eq, Show)
 
 data Difficulty = Difficulty {height :: Int, width :: Int, numMines :: Int}
@@ -124,6 +124,9 @@ unlockCell (Cell number _) = Cell number Open
 flagCell :: Cell -> Cell
 flagCell (Cell number _) = Cell number Flag
 
+unFlagCell :: Cell -> Cell
+unFlagCell (Cell number _) = Cell number Closed
+
 unlockBoard :: Board -> Board
 unlockBoard = (map . map) unlockCell
 
@@ -137,12 +140,13 @@ unlockEmptyFrom board coords@(row, col)
   | otherwise = undefined
   where cell = board !! row !! col
 
-doMove :: Board -> (Int, Int) -> Move -> Either Board Board
-doMove board coords@(row, col) move
-  | move == FlagIt       = Right (opOnCell flagCell board coords)
-  | cell == closedMine   = Left (unlockBoard board)
-  | state cell == Closed = Right (unlockEmptyFrom board coords)
-  | otherwise            = Right board
+doMove :: Board -> (Move, (Int, Int)) -> Board
+doMove board (move, coords@(row, col))
+  | move == FlagIt       = opOnCell flagCell board coords
+  | move == UnFlagIt     = opOnCell unFlagCell board coords
+  | cell == closedMine   = unlockBoard board
+  | state cell == Closed = unlockEmptyFrom board coords
+  | otherwise            = board
   where cell = board !! row !! col
 
 isGameWon :: Board -> Bool
@@ -166,11 +170,26 @@ runGame = do
     "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
   firstMove <- getLine
   let row = ord (head firstMove) - 97
-  let col = read (tail firstMove) :: Int
+  let col = read (tail firstMove) - 1 :: Int
   board <- initBoard difficulty [(row, col)]
+  gameLoop board (OpenIt, (row, col))
   putStrLn "dummy"
 
--- gameLoop :: board -> IO ()
--- gameLoop board = do
---   board <- initBoard difficulty [firstMove]
---   putStrLn "dummy"
+inputMove :: IO (Move, (Int, Int))
+inputMove = do
+  putStrLn
+    "Input next move. Format: <o for open, p for flag, u for unflag><row letter (a,b..)><col number (1,2..)"
+  input <- getLine
+  let move | head input == 'o' = OpenIt
+           | otherwise         = FlagIt
+  let row = ord (head . tail $ input) - 97
+  let col = read (drop 2 input) - 1 :: Int
+  return (move, (row, col))
+
+gameLoop :: Board -> (Move, (Int, Int)) -> IO ()
+gameLoop board (move, coords@(row, col))
+  | state cell == Open
+  = putStrLn "That cell is alredy open." >> inputMove >>= gameLoop board
+  | otherwise
+  = inputMove >>= gameLoop (doMove board (move, coords))
+  where cell = board !! row !! col
