@@ -1,3 +1,5 @@
+{-# LANGUAGE BlockArguments #-}
+
 module Lib where
 
 import qualified System.Random                 as R
@@ -42,7 +44,7 @@ type Board = [[Cell]]
 showCell (Cell _      Closed) = "%"         -- Closed cell
 showCell (Cell _      Flag  ) = "P"         -- Flag
 showCell (Cell 9      Open  ) = "*"         -- Mine
-showCell (Cell 0      Open  ) = "_"         -- No number
+showCell (Cell 0      Open  ) = "-"         -- No number
 showCell (Cell number Open  ) = show number -- Number
 
 prettyRepr :: Board -> String
@@ -149,19 +151,65 @@ doMove :: Board -> Maybe (Move, (Int, Int)) -> (Board, Bool, String)
 doMove board Nothing = (board, True, "Invalid move.")
 doMove board (Just (move, coords))
   | state cell == Open
-  = (board, True, "This cell is already open.\n")
+  = (board, True, "This cell is already open.")
   | move == FlagIt
-  = (opOnCell flagCell board coords, True, "Cell successfuly flagged.\n")
+  = (opOnCell flagCell board coords, True, "Cell successfuly flagged.")
   | move == UnFlagIt
-  = (opOnCell unFlagCell board coords, True, "Cell successfuly unflagged.\n")
+  = (opOnCell unFlagCell board coords, True, "Cell successfuly unflagged.")
+  | state cell == Flag
+  = (board, True, "You need to unflag this cell (u) before you can open it.")
   | number cell == 9 -- mine
-  = (unlockBoard board, False, "Whoops, you stepped on a mine!\n")
+  = (unlockBoard board, False, "Whoops, you stepped on a mine!")
   | otherwise
-  = (unlockEmptyFrom board coords, True, "TODO replace")
+  = ( unlockEmptyFrom board coords
+    , True
+    , "That was an empty cell, unlocking the area."
+    )
   where cell = board !! fst coords !! snd coords
 
 isGameWon :: Board -> Bool
 isGameWon = not . any (any closedPeaceful)
+
+inputMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
+inputMove difficulty = do
+  putStrLn
+    "Input next move. Format: <o for open, f for flag, u for unflag><row letter (a,b..)><col number (1,2..)"
+  input <- getLine
+  return . evalInput difficulty $ input
+
+evalInput :: Difficulty -> String -> Maybe (Move, (Int, Int))
+evalInput difficulty input = do
+  move'' <- headMay input
+  let move' | move'' == 'o' = Just OpenIt
+            | move'' == 'f' = Just FlagIt
+            | move'' == 'u' = Just UnFlagIt
+            | otherwise     = Nothing
+  move <- move'
+  t    <- tailMay input
+  row' <- headMay t
+  let row = ord row' - 97
+  t'   <- tailMay t
+  col' <- readMaybe t' :: Maybe Int
+  let col = col' - 1
+  if row
+       `inRange` (0, height difficulty - 1)
+       &&        col
+       `inRange` (0, width difficulty - 1)
+    then return (move, (row, col))
+    else Nothing
+
+gameLoop :: Difficulty -> Board -> Maybe (Move, (Int, Int)) -> IO ()
+gameLoop difficulty board maybeMoveCoords
+  | isGameWon board = putStrLn "You won!"
+  | otherwise = do
+    let (newBoard, continue, message) = doMove board maybeMoveCoords
+    prettyPrint newBoard
+    putStrLn message
+    if continue
+      then do
+        newMove <- inputMove difficulty
+        gameLoop difficulty newBoard newMove
+      else putStrLn "Game over."
 
 runGame :: IO ()
 runGame = do
@@ -180,42 +228,9 @@ runGame = do
       else putStrLn "The difficulty is set to expert."
   putStrLn
     "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
-  firstMove <- getLine
-  let row = ord (head firstMove) - 97
-  let col = read (tail firstMove) - 1 :: Int
-  board <- initBoard difficulty [(row, col)]
-  gameLoop board (Just (OpenIt, (row, col)))
-
-inputMove :: IO (Maybe (Move, (Int, Int)))
-inputMove = do
-  putStrLn
-    "Input next move. Format: <o for open, p for flag, u for unflag><row letter (a,b..)><col number (1,2..)"
   input <- getLine
-  return . evalInput $ input
+  let maybeMove       = evalInput difficulty ("o" ++ input)
+  let (_, (row, col)) = fromMaybe (OpenIt, (0, 0)) maybeMove
+  board <- initBoard difficulty [(row, col)]
+  gameLoop difficulty board maybeMove
 
-evalInput :: String -> Maybe (Move, (Int, Int))
-evalInput input = do
-  move' <- headMay input
-  let move | move' == 'o' = OpenIt
-           | move' == 'p' = FlagIt
-           | otherwise    = UnFlagIt
-  t    <- tailMay input
-  row' <- headMay t
-  let row = ord row' - 97
-  t'   <- tailMay t
-  col' <- readMaybe t' :: Maybe Int
-  let col = col' - 1
-  return (move, (row, col))
-
-gameLoop :: Board -> Maybe (Move, (Int, Int)) -> IO ()
-gameLoop board maybeMoveCoords
-  | isGameWon board = putStrLn "You won!"
-  | otherwise = do
-    let (newBoard, continue, message) = doMove board maybeMoveCoords
-    prettyPrint newBoard
-    putStr message
-    if continue
-      then do
-        newMove <- inputMove
-        gameLoop newBoard newMove
-      else putStrLn "Game over."
