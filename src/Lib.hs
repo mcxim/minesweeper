@@ -6,6 +6,11 @@ import qualified Data.Set                      as S
 import qualified Data.List                     as L
 import           Test.Hspec
 import           Data.Char
+import           Safe                           ( headMay
+                                                , tailMay
+                                                )
+import           Text.Read                      ( readMaybe )
+import           Data.Maybe                     ( fromMaybe )
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
@@ -140,14 +145,20 @@ unlockEmptyFrom board coords@(row, col)
   | otherwise = undefined
   where cell = board !! row !! col
 
-doMove :: Board -> (Move, (Int, Int)) -> Board
-doMove board (move, coords@(row, col))
-  | move == FlagIt       = opOnCell flagCell board coords
-  | move == UnFlagIt     = opOnCell unFlagCell board coords
-  | cell == closedMine   = unlockBoard board
-  | state cell == Closed = unlockEmptyFrom board coords
-  | otherwise            = board
-  where cell = board !! row !! col
+doMove :: Board -> Maybe (Move, (Int, Int)) -> (Board, Bool, String)
+doMove board Nothing = (board, True, "Invalid move.")
+doMove board (Just (move, coords))
+  | state cell == Open
+  = (board, True, "This cell is already open.\n")
+  | move == FlagIt
+  = (opOnCell flagCell board coords, True, "Cell successfuly flagged.\n")
+  | move == UnFlagIt
+  = (opOnCell unFlagCell board coords, True, "Cell successfuly unflagged.\n")
+  | number cell == 9 -- mine
+  = (unlockBoard board, False, "Whoops, you stepped on a mine!\n")
+  | otherwise
+  = (unlockEmptyFrom board coords, True, "TODO replace")
+  where cell = board !! fst coords !! snd coords
 
 isGameWon :: Board -> Bool
 isGameWon = not . any (any closedPeaceful)
@@ -162,34 +173,49 @@ runGame = do
         'i' -> intermediate
         'e' -> expert
         _   -> beginner
-  case difficulty of
-    beginner     -> putStrLn "The difficulty is set to beginner."
-    intermediate -> putStrLn "The difficulty is set to intermediate."
-    expert       -> putStrLn "The difficulty is set to expert."
+  if difficulty == beginner
+    then putStrLn "The difficulty is set to beginner"
+    else if difficulty == intermediate
+      then putStrLn "The difficulty is set to intermediate."
+      else putStrLn "The difficulty is set to expert."
   putStrLn
     "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
   firstMove <- getLine
   let row = ord (head firstMove) - 97
   let col = read (tail firstMove) - 1 :: Int
   board <- initBoard difficulty [(row, col)]
-  gameLoop board (OpenIt, (row, col))
-  putStrLn "dummy"
+  gameLoop board (Just (OpenIt, (row, col)))
 
-inputMove :: IO (Move, (Int, Int))
+inputMove :: IO (Maybe (Move, (Int, Int)))
 inputMove = do
   putStrLn
     "Input next move. Format: <o for open, p for flag, u for unflag><row letter (a,b..)><col number (1,2..)"
   input <- getLine
-  let move | head input == 'o' = OpenIt
-           | otherwise         = FlagIt
-  let row = ord (head . tail $ input) - 97
-  let col = read (drop 2 input) - 1 :: Int
+  return . evalInput $ input
+
+evalInput :: String -> Maybe (Move, (Int, Int))
+evalInput input = do
+  move' <- headMay input
+  let move | move' == 'o' = OpenIt
+           | move' == 'p' = FlagIt
+           | otherwise    = UnFlagIt
+  t    <- tailMay input
+  row' <- headMay t
+  let row = ord row' - 97
+  t'   <- tailMay t
+  col' <- readMaybe t' :: Maybe Int
+  let col = col' - 1
   return (move, (row, col))
 
-gameLoop :: Board -> (Move, (Int, Int)) -> IO ()
-gameLoop board (move, coords@(row, col))
-  | state cell == Open
-  = putStrLn "That cell is alredy open." >> inputMove >>= gameLoop board
-  | otherwise
-  = inputMove >>= gameLoop (doMove board (move, coords))
-  where cell = board !! row !! col
+gameLoop :: Board -> Maybe (Move, (Int, Int)) -> IO ()
+gameLoop board maybeMoveCoords
+  | isGameWon board = putStrLn "You won!"
+  | otherwise = do
+    let (newBoard, continue, message) = doMove board maybeMoveCoords
+    prettyPrint newBoard
+    putStr message
+    if continue
+      then do
+        newMove <- inputMove
+        gameLoop newBoard newMove
+      else putStrLn "Game over."

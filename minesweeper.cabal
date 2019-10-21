@@ -37,6 +37,7 @@ library
     , random
     , containers
     , hspec
+    , safe
   default-language: Haskell2010
 
 executable minesweeper-exe
