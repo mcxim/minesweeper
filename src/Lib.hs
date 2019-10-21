@@ -12,7 +12,9 @@ import           Safe                           ( headMay
                                                 , tailMay
                                                 )
 import           Text.Read                      ( readMaybe )
-import           Data.Maybe                     ( fromMaybe )
+import           Data.Maybe                     ( fromMaybe
+                                                , isNothing
+                                                )
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
@@ -66,6 +68,12 @@ opOnCell f board (row, col) =
 emptyBoard :: Difficulty -> Board
 emptyBoard difficulty =
   replicate (height difficulty) $ replicate (width difficulty) (Cell 9 Closed)
+
+dummyBoard :: Difficulty -> Board
+dummyBoard difficulty =
+  [ [ Cell 0 Closed | _ <- [1 .. width difficulty] ]
+  | _ <- [1 .. height difficulty]
+  ]
 
 composeMN :: (Monad m) => Int -> (a -> m a) -> a -> m a
 composeMN 1 f = f
@@ -161,10 +169,7 @@ doMove board (Just (move, coords))
   | number cell == 9 -- mine
   = (unlockBoard board, False, "Whoops, you stepped on a mine!")
   | otherwise
-  = ( unlockEmptyFrom board coords
-    , True
-    , "That was an empty cell, unlocking the area."
-    )
+  = (unlockEmptyFrom board coords, True, "That was an empty cell.")
   where cell = board !! fst coords !! snd coords
 
 isGameWon :: Board -> Bool
@@ -198,6 +203,26 @@ evalInput difficulty input = do
     then return (move, (row, col))
     else Nothing
 
+inputDifficulty :: IO Difficulty
+inputDifficulty = do
+  putStrLn
+    "Please choose difficulty level:\nb - beginner,\ni - intermediate,\ne - expert"
+  difficultyInput <- getLine
+  case head difficultyInput of
+    'b' -> putStrLn "Difficulty set to beginner." >> return beginner
+    'i' -> putStrLn "Difficulty set to intermediate." >> return intermediate
+    'e' -> putStrLn "Difficulty set to expert." >> return expert
+    _   -> inputDifficulty
+
+inputFirstMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
+inputFirstMove difficulty = do
+  prettyPrint $ dummyBoard difficulty
+  putStrLn
+    "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
+  input <- getLine
+  let maybeMove = evalInput difficulty ("o" ++ input)
+  if isNothing maybeMove then inputFirstMove difficulty else return maybeMove
+
 gameLoop :: Difficulty -> Board -> Maybe (Move, (Int, Int)) -> IO ()
 gameLoop difficulty board maybeMoveCoords
   | isGameWon board = putStrLn "You won!"
@@ -213,24 +238,9 @@ gameLoop difficulty board maybeMoveCoords
 
 runGame :: IO ()
 runGame = do
-  putStrLn
-    "Please choose difficulty level:\nb - beginner,\ni - intermediate,\ne - expert"
-  difficultyInput <- getLine
-  let difficulty = case head difficultyInput of
-        'b' -> beginner
-        'i' -> intermediate
-        'e' -> expert
-        _   -> beginner
-  if difficulty == beginner
-    then putStrLn "The difficulty is set to beginner"
-    else if difficulty == intermediate
-      then putStrLn "The difficulty is set to intermediate."
-      else putStrLn "The difficulty is set to expert."
-  putStrLn
-    "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
-  input <- getLine
-  let maybeMove       = evalInput difficulty ("o" ++ input)
-  let (_, (row, col)) = fromMaybe (OpenIt, (0, 0)) maybeMove
+  difficulty <- inputDifficulty
+  maybeMove  <- inputFirstMove difficulty
+  let (_, (row, col)) = fromMaybe undefined maybeMove
   board <- initBoard difficulty [(row, col)]
   gameLoop difficulty board maybeMove
 
