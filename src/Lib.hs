@@ -12,6 +12,9 @@ someFunc = putStrLn "someFunc"
 data State = Flag | Closed | Open
   deriving (Show, Eq)
 
+data Move = FlagIt | OpenIt
+  deriving (Eq, Show)
+
 data Difficulty = Difficulty {height :: Int, width :: Int, numMines :: Int}
   deriving (Show, Eq)
 
@@ -21,6 +24,10 @@ expert = Difficulty { height = 16, width = 30, numMines = 99 }
 
 data Cell = Cell {number :: Int, state :: State}
   deriving (Show, Eq)
+
+isClosed :: Cell -> Bool
+isClosed (Cell _ Closed) = False
+isClosed _               = True
 
 closedMine = Cell 9 Closed
 closedEmpty = Cell 0 Closed
@@ -110,14 +117,34 @@ initBoard difficulty =
 unlockCell :: Cell -> Cell
 unlockCell (Cell number _) = Cell number Open
 
+flagCell :: Cell -> Cell
+flagCell (Cell number _) = Cell number Flag
+
 unlockBoard :: Board -> Board
 unlockBoard = (map . map) unlockCell
 
+-- unlockEmptyFrom :: Board -> (Int, Int) -> Board
+-- unlockEmptyFrom board coords = L.foldl' foldFunction
+--                                         (opOnCell unlockCell board coords)
+--                                         (neighborIdxs board coords)
+--  where
+--   foldFunction accBoard coords@(row, col)
+--     | accBoard !! row !! col == closedEmpty = unlockEmptyFrom accBoard coords
+--     | otherwise = opOnCell unlockCell accBoard coords
+
 unlockEmptyFrom :: Board -> (Int, Int) -> Board
-unlockEmptyFrom board coords = L.foldl' foldFunction
-                                        (opOnCell unlockCell board coords)
-                                        (neighborIdxs board coords)
- where
-  foldFunction accBoard coords@(row, col)
-    | accBoard !! row !! col == closedEmpty = unlockEmptyFrom accBoard coords
-    | otherwise = opOnCell unlockCell accBoard coords
+unlockEmptyFrom board coords@(row, col)
+  | state cell == Open = board
+  | number cell `inRange` (1, 8) = opOnCell unlockCell board coords
+  | number cell == 0 = L.foldl' unlockEmptyFrom
+                                (opOnCell unlockCell board coords)
+                                (neighborIdxs board coords)
+  | otherwise = undefined
+  where cell = board !! row !! col
+
+doMove :: Board -> (Int, Int) -> Move -> Either Board Board
+doMove board coords@(row, col) move
+  | move == FlagIt       = Right (opOnCell flagCell board coords)
+  | cell == closedMine   = Left (unlockBoard board)
+  | state cell == Closed = Right (unlockEmptyFrom board coords)
+  where cell = board !! row !! col
