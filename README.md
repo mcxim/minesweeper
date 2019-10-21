@@ -1,2 +1,2 @@
 # minesweeper
-Not yet finished, a simple console implementation of minesweeper in haskell.
+A simple console implementation of minesweeper in haskell.
