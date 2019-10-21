@@ -1,5 +1,3 @@
-{-# LANGUAGE BlockArguments #-}
-
 module Lib where
 
 import qualified System.Random                 as R
@@ -165,7 +163,7 @@ unlockEmptyFrom board coords@(row, col)
   where cell = board !! row !! col
 
 doMove :: Board -> Maybe (Move, (Int, Int)) -> (Board, Bool, String)
-doMove board Nothing = (board, True, "Invalid move.")
+doMove board Nothing = (board, True, "Invalid input. (doMove)")
 doMove board (Just (move, coords))
   | state cell == Open
   = (board, True, "This cell is already open.")
@@ -189,7 +187,28 @@ inputMove difficulty = do
   putStrLn
     "Input next move. Format: <o for open, f for flag, u for unflag><row letter (a,b..)><col number (1,2..)"
   input <- getLine
-  return . evalInput difficulty $ input
+  if input == "q"
+    then exitSuccess
+    else do
+      let move = evalInput difficulty input
+      if isNothing move
+        then putStrLn "Invalid input. (inputMove)" >> inputMove difficulty
+        else return move
+
+inputFirstMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
+inputFirstMove difficulty = do
+  prettyPrint $ dummyBoard difficulty
+  putStrLn
+    "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
+  input <- getLine
+  if input == "q"
+    then exitSuccess
+    else do
+      let move = evalInput difficulty ("o" ++ input)
+      if isNothing move
+        then putStrLn "Invalid input. (inputFirstMove)"
+          >> inputFirstMove difficulty
+        else return move
 
 evalInput :: Difficulty -> String -> Maybe (Move, (Int, Int))
 evalInput difficulty input = do
@@ -222,18 +241,7 @@ inputDifficulty = do
     'i' -> putStrLn "Difficulty set to intermediate." >> return intermediate
     'e' -> putStrLn "Difficulty set to expert." >> return expert
     'q' -> exitSuccess
-    _   -> putStrLn "Invalid input." >> inputDifficulty
-
-inputFirstMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
-inputFirstMove difficulty = do
-  prettyPrint $ dummyBoard difficulty
-  putStrLn
-    "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
-  input <- getLine
-  let maybeMove = evalInput difficulty ("o" ++ input)
-  if isNothing maybeMove
-    then putStrLn "Invalid input." >> inputFirstMove difficulty
-    else return maybeMove
+    _   -> putStrLn "Invalid input. (inputDifficulty)" >> inputDifficulty
 
 gameLoop :: Difficulty -> Board -> Maybe (Move, (Int, Int)) -> IO ()
 gameLoop difficulty board maybeMoveCoords
