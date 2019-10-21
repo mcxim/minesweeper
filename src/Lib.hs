@@ -5,6 +5,7 @@ import           Control.Monad                  ( (>=>) )
 import qualified Data.Set                      as S
 import qualified Data.List                     as L
 import           Test.Hspec
+import           Data.Char
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
@@ -25,12 +26,11 @@ expert = Difficulty { height = 16, width = 30, numMines = 99 }
 data Cell = Cell {number :: Int, state :: State}
   deriving (Show, Eq)
 
-isClosed :: Cell -> Bool
-isClosed (Cell _ Closed) = False
-isClosed _               = True
-
 closedMine = Cell 9 Closed
 closedEmpty = Cell 0 Closed
+
+closedPeaceful :: Cell -> Bool
+closedPeaceful (Cell number state) = state == Closed && number /= 9
 
 type Board = [[Cell]]
 
@@ -67,7 +67,7 @@ composeMN n f = f >=> composeMN (n - 1) f
 addRandomMine :: Board -> IO Board
 addRandomMine board = undefined
 
-neighborIdxs :: Board -> (Int, Int) -> [(Int, Int)]
+neighborIdxs :: [[a]] -> (Int, Int) -> [(Int, Int)]
 neighborIdxs board (row, col) =
   [ (row', col')
   | row' <- [row - 1 .. row + 1]
@@ -83,13 +83,17 @@ neighbors board (row, col) =
 
 -- | Returns a new board given a difficulty.
 -- Testing: initBoard intermediate >>= (prettyPrint . unlockBoard)
-initBoard :: Difficulty -> IO Board
-initBoard difficulty =
+initBoard :: Difficulty -> [(Int, Int)] -> IO Board
+initBoard difficulty safeSpots =
   let matrix =
           [ [ (row, col) | col <- [0 .. width difficulty - 1] ]
           | row <- [0 .. height difficulty - 1]
           ]
-      idxs = concat matrix
+      safeExpanded = L.nub $ do
+        spot <- safeSpots
+        let spotNeighbors = neighborIdxs matrix spot
+        spot : spotNeighbors
+      idxs = filter (`notElem` safeExpanded) (concat matrix)
       genMineIdxs =
           (\g -> map (idxs !!) $ take
               (numMines difficulty)
@@ -123,15 +127,6 @@ flagCell (Cell number _) = Cell number Flag
 unlockBoard :: Board -> Board
 unlockBoard = (map . map) unlockCell
 
--- unlockEmptyFrom :: Board -> (Int, Int) -> Board
--- unlockEmptyFrom board coords = L.foldl' foldFunction
---                                         (opOnCell unlockCell board coords)
---                                         (neighborIdxs board coords)
---  where
---   foldFunction accBoard coords@(row, col)
---     | accBoard !! row !! col == closedEmpty = unlockEmptyFrom accBoard coords
---     | otherwise = opOnCell unlockCell accBoard coords
-
 unlockEmptyFrom :: Board -> (Int, Int) -> Board
 unlockEmptyFrom board coords@(row, col)
   | state cell == Open = board
@@ -147,4 +142,35 @@ doMove board coords@(row, col) move
   | move == FlagIt       = Right (opOnCell flagCell board coords)
   | cell == closedMine   = Left (unlockBoard board)
   | state cell == Closed = Right (unlockEmptyFrom board coords)
+  | otherwise            = Right board
   where cell = board !! row !! col
+
+isGameWon :: Board -> Bool
+isGameWon = not . any (any closedPeaceful)
+
+runGame :: IO ()
+runGame = do
+  putStrLn
+    "Please choose difficulty level:\nb - beginner,\ni - intermediate,\ne - expert"
+  difficultyInput <- getLine
+  let difficulty = case head difficultyInput of
+        'b' -> beginner
+        'i' -> intermediate
+        'e' -> expert
+        _   -> beginner
+  case difficulty of
+    beginner     -> putStrLn "The difficulty is set to beginner."
+    intermediate -> putStrLn "The difficulty is set to intermediate."
+    expert       -> putStrLn "The difficulty is set to expert."
+  putStrLn
+    "Input first move (safe). Format: <row letter (a,b..)><col number (1,2..)>"
+  firstMove <- getLine
+  let row = ord (head firstMove) - 97
+  let col = read (tail firstMove) :: Int
+  board <- initBoard difficulty [(row, col)]
+  putStrLn "dummy"
+
+-- gameLoop :: board -> IO ()
+-- gameLoop board = do
+--   board <- initBoard difficulty [firstMove]
+--   putStrLn "dummy"
