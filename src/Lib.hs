@@ -227,17 +227,17 @@ inputDifficulty = do
     _   -> putStrLn "Invalid input." >> inputDifficulty
 
 gameLoop :: Difficulty -> Board -> Maybe (Move, (Int, Int)) -> IO ()
-gameLoop difficulty board maybeMoveCoords
-  | gameWon board = putStrLn "You won!"
-  | otherwise = do
+gameLoop difficulty board maybeMoveCoords = do
     let (newBoard, continue, message) = doMove board maybeMoveCoords
     prettyPrint newBoard
     putStrLn message
-    if continue
-      then do
-        newMove <- inputMove difficulty
-        gameLoop difficulty newBoard newMove
-      else putStrLn "Game over."
+    if gameWon newBoard
+      then putStrLn "You won!"
+      else if continue
+        then do
+          newMove <- inputMove difficulty
+          gameLoop difficulty newBoard newMove
+        else putStrLn "Game over."
 
 runGame :: IO ()
 runGame = do
