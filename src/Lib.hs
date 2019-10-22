@@ -159,17 +159,19 @@ doMove board (Just (move, coords))
   | number cell == 9
   = (unlockBoard board, False, "Whoops, you stepped on a mine!")
   | otherwise
-  = (unlockEmptyFrom board coords, True, "That was an empty cell.")
+  = (unlockEmptyFrom board coords, True, "Peaceful cell, opening.")
   where cell = board !! fst coords !! snd coords
 
 gameWon :: Board -> Bool
-gameWon = not . any (any closedPeaceful)
+gameWon board =
+  (not . any (any closedPeaceful) $ board)
+    && (not . any (Cell 9 Open `elem`) $ board)
   where closedPeaceful (Cell number state) = state == Closed && number /= 9
 
 inputMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
 inputMove difficulty = do
   putStrLn
-    "Input next move. Format: <o for open, f for flag, u for unflag><row letter (a,b..)><col number (1,2..)"
+    "Input next move. Format: <o for open, f for flag, u for unflag><row letter (a,b..)><col number (1,2..)>"
   input <- getLine
   if input == "q"
     then exitSuccess
@@ -228,16 +230,16 @@ inputDifficulty = do
 
 gameLoop :: Difficulty -> Board -> Maybe (Move, (Int, Int)) -> IO ()
 gameLoop difficulty board maybeMoveCoords = do
-    let (newBoard, continue, message) = doMove board maybeMoveCoords
-    prettyPrint newBoard
-    putStrLn message
-    if gameWon newBoard
-      then putStrLn "You won!"
-      else if continue
-        then do
-          newMove <- inputMove difficulty
-          gameLoop difficulty newBoard newMove
-        else putStrLn "Game over."
+  let (newBoard, continue, message) = doMove board maybeMoveCoords
+  prettyPrint newBoard
+  putStrLn message
+  if gameWon newBoard
+    then putStrLn "You won!"
+    else if continue
+      then do
+        newMove <- inputMove difficulty
+        gameLoop difficulty newBoard newMove
+      else putStrLn "Game over."
 
 runGame :: IO ()
 runGame = do
