@@ -140,10 +140,9 @@ unlockEmptyFrom :: Board -> (Int, Int) -> Board
 unlockEmptyFrom board coords@(row, col)
   | state cell == Open = board
   | number cell `inRange` (1, 8) = opOnCell unlockCell board coords
-  | number cell == 0 = L.foldl' unlockEmptyFrom
-                                (opOnCell unlockCell board coords)
-                                (neighborIdxs board coords)
-  | otherwise = undefined
+  | otherwise = L.foldl' unlockEmptyFrom
+                         (opOnCell unlockCell board coords)
+                         (neighborIdxs board coords)
   where cell = board !! row !! col
 
 doMove :: Board -> Maybe (Move, (Int, Int)) -> (Board, Bool, String)
