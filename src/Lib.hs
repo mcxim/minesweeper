@@ -145,9 +145,8 @@ unlockEmptyFrom board coords@(row, col)
                          (neighborIdxs board coords)
   where cell = board !! row !! col
 
-doMove :: Board -> Maybe (Move, (Int, Int)) -> (Board, Bool, String)
-doMove board Nothing = (board, True, "Invalid input.")
-doMove board (Just (move, coords))
+doMove :: Board -> (Move, (Int, Int)) -> (Board, Bool, String)
+doMove board (move, coords)
   | state cell == Open
   = (board, True, "This cell is already open.")
   | move == FlagIt
@@ -168,7 +167,7 @@ gameWon board =
     && (not . any (Cell 9 Open `elem`) $ board)
   where closedPeaceful (Cell number state) = state == Closed && number /= 9
 
-inputMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
+inputMove :: Difficulty -> IO (Move, (Int, Int))
 inputMove difficulty = do
   putStrLn
     "Input next move. Format: <o for open, f for flag, u for unflag><row letter (a,b..)><col number (1,2..)>"
@@ -179,9 +178,9 @@ inputMove difficulty = do
       let move = evalInput difficulty input
       in  if isNothing move
             then putStrLn "Invalid input." >> inputMove difficulty
-            else return move
+            else return $ fromMaybe undefined move
 
-inputFirstMove :: Difficulty -> IO (Maybe (Move, (Int, Int)))
+inputFirstMove :: Difficulty -> IO (Move, (Int, Int))
 inputFirstMove difficulty = do
   prettyPrint $ dummyBoard difficulty
   putStrLn
@@ -193,7 +192,7 @@ inputFirstMove difficulty = do
       let move = evalInput difficulty ("o" ++ input)
       in  if isNothing move
             then putStrLn "Invalid input." >> inputFirstMove difficulty
-            else return move
+            else return $ fromMaybe undefined move
 
 evalInput :: Difficulty -> String -> Maybe (Move, (Int, Int))
 evalInput difficulty input = do
@@ -228,17 +227,22 @@ inputDifficulty = do
     'q' -> exitSuccess
     _   -> putStrLn "Invalid input." >> inputDifficulty
 
-gameLoop :: Difficulty -> Board -> Maybe (Move, (Int, Int)) -> IO ()
-gameLoop difficulty board maybeMoveCoords
-  | gameWon newBoard = putStrLn "You won!"
-  | continue         = inputMove difficulty >>= gameLoop difficulty newBoard
-  | otherwise        = putStrLn "Game over."
-  where (newBoard, continue, message) = doMove board maybeMoveCoords
+gameLoop :: Difficulty -> Board -> (Move, (Int, Int)) -> IO ()
+gameLoop difficulty oldBoard move
+  | gameWon board
+  = printDetails >> putStrLn "You won!"
+  | continue
+  = printDetails >> inputMove difficulty >>= gameLoop difficulty board
+  | otherwise
+  = printDetails >> putStrLn "Game over."
+ where
+  (board, continue, message) = doMove oldBoard move
+  printDetails               = prettyPrint board >> putStrLn message
 
 runGame :: IO ()
 runGame = do
   difficulty <- inputDifficulty
-  maybeMove  <- inputFirstMove difficulty
-  let (_, (row, col)) = fromMaybe undefined maybeMove
+  move       <- inputFirstMove difficulty
+  let (_, (row, col)) = move
   board <- initBoard difficulty [(row, col)]
-  gameLoop difficulty board maybeMove
+  gameLoop difficulty board move
